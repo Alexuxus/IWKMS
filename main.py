@@ -44,7 +44,7 @@ sprite_rects = [
     (18, 3, 14, 17),  # 1 - right walk 1
     (32, 3, 14, 17),  # 2 - right walk 2
     (46, 3, 14, 17),  # 3 - right walk 3
-    (60, 3, 14, 17)  # 4 - dead
+    (16, 22, 17, 13)  # 4 - dead
 ]
 
 # Extract Sprites
@@ -80,7 +80,7 @@ LEVEL_HEIGHT = len(level_data)
 player_x = 50
 player_y = 500
 player_speed = 5
-animation_speed = 4
+animation_speed = 1
 player_frame = 0
 movement_direction = None
 is_jumping = False
@@ -232,6 +232,9 @@ while running:
         player_y = player_rect.y
     if not colliding:
         is_jumping = True
+
+    if colliding and (collided_tile == "s" or collided_tile == "d" or collided_tile == "f" or collided_tile == "e"):
+        is_dead = True
 
     if player_y >= 500 and not colliding:
         player_y = 500
