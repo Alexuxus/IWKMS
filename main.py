@@ -1,17 +1,16 @@
 import pygame
-
 pygame.init()
 pygame.display.init()
 
 # Screen settings
 WIDTH, HEIGHT = 1024, 512
-TILE_SIZE = 8  # Size of each tile in pixels
+TILE_SIZE = 8
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("IWKMS")
 
 # Colors
 WHITE = (255, 255, 255)
-
+BLACK = (0, 0, 0)
 
 class SpriteSheet:
     def __init__(self, filename):
@@ -34,23 +33,20 @@ class SpriteSheet:
     def images_at(self, rects, colorkey=None):
         return [self.image_at(rect, colorkey) for rect in rects]
 
-
 # Load spritesheet
 spritesheet = SpriteSheet("qubic.png")
 
 # Player Sprite Rects
 sprite_rects = [
-    (4, 3, 14, 17),  # 0 - right stand
-    (18, 3, 14, 17),  # 1 - right walk 1
-    (32, 3, 14, 17),  # 2 - right walk 2
-    (46, 3, 14, 17),  # 3 - right walk 3
-    (16, 22, 17, 13)  # 4 - dead
+    (4, 3, 14, 17),  # 0 - standing
+    (18, 3, 14, 17),  # 1 - walk 1
+    (32, 3, 14, 17),  # 2 - walk 2
+    (46, 3, 14, 17),  # 3 - walk 3
+    (16, 22, 17, 13)  # 4 - death
 ]
-
-# Extract Sprites
 sprites = spritesheet.images_at(sprite_rects, colorkey=(255, 255, 255))
 
-# Load Tile Images (Make sure these images are in the same directory)
+# Tile images
 tile_images = {
     't': pygame.transform.scale(pygame.image.load("grass-top.png").convert_alpha(), (TILE_SIZE, TILE_SIZE)),
     'g': pygame.transform.scale(pygame.image.load("grass-under.png").convert_alpha(), (TILE_SIZE, TILE_SIZE)),
@@ -58,216 +54,195 @@ tile_images = {
     'd': pygame.transform.scale(pygame.image.load("spike2.png").convert_alpha(), (TILE_SIZE, TILE_SIZE)),
     'f': pygame.transform.scale(pygame.image.load("spike3.png").convert_alpha(), (TILE_SIZE, TILE_SIZE)),
     'e': pygame.transform.scale(pygame.image.load("spike4.png").convert_alpha(), (TILE_SIZE, TILE_SIZE)),
-    # Changed 'g' to 'e' to avoid conflict with grass
-    '.': None  # empty tile
+    '.': None
 }
 
-
-# Load Level
 def load_level(filename):
-    level_data = []
     with open(filename, 'r') as file:
-        for row in file:
-            level_data.append(row.strip())
-    return level_data
-
+        return [row.strip() for row in file]
 
 level_data = load_level("level.txt")
-LEVEL_WIDTH = len(level_data[0])
-LEVEL_HEIGHT = len(level_data)
+LEVEL_WIDTH, LEVEL_HEIGHT = len(level_data[0]), len(level_data)
 
 # Player settings
-player_x = 50
-player_y = 500
+player_x, player_y = 50, 200
 player_speed = 5
-animation_speed = 1
 player_frame = 0
 movement_direction = None
 is_jumping = False
 y_velocity = 0
 gravity = 1
 facing_right = True
-is_dead = False  # New death variable
-dead_frame = 4  # New frame if player is dead
-is_on_ground = False  # New variable
-
-# Animation frames
+is_dead = False
+is_on_ground = False
+death_animation_delay = 0
 right_frames = [0, 1, 2, 3]
 
-# Find player starting position
+# Find starting position
 for row_index, row in enumerate(level_data):
     if 't' in row:
         player_start_y = row_index * TILE_SIZE
         break
-    else:
-        player_start_y = 500
-
-# Set player pos
+else:
+    player_start_y = 500
 player_x = 0
 player_y = player_start_y - sprites[0].get_height()
 
+class GameObject(pygame.sprite.Sprite):
+    def __init__(self, x, y, image=None, tile_type=None):
+        super().__init__()
+        self.image = image if image else pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
+        self.rect = self.image.get_rect(topleft=(x, y))
+        self.tile_type = tile_type
 
-# Collision Detection Function
-def check_collision(player_rect, level_data):
-    player_x, player_y = player_rect.x, player_rect.y
-    player_width, player_height = player_rect.width, player_rect.height
+    def move(self, dx, dy, everything):
+        global is_on_ground, y_velocity, is_dead
+        # X-axis movement
+        self.rect.x += dx
+        for other in pygame.sprite.spritecollide(self, everything, False):
+            if other.tile_type in ['t', 'g']:
+                if dx > 0:
+                    self.rect.right = other.rect.left
+                elif dx < 0:
+                    self.rect.left = other.rect.right
+                dx = 0
 
-    # Calculate the tiles the player is touching
-    left_tile_x = int(player_x // TILE_SIZE)
-    right_tile_x = int((player_x + player_width) // TILE_SIZE)
-    top_tile_y = int(player_y // TILE_SIZE)
-    bottom_tile_y = int((player_y + player_height) // TILE_SIZE)
+        # Y-axis movement
+        self.rect.y += dy
+        for other in pygame.sprite.spritecollide(self, everything, False):
+            if other.tile_type in ['t', 'g']:
+                if dy > 0:
+                    self.rect.bottom = other.rect.top
+                    is_on_ground = True
+                    is_jumping = False
+                    y_velocity = 0
+                elif dy < 0:
+                    self.rect.top = other.rect.bottom
+                    y_velocity = 0
+                dy = 0
 
-    colliding = False
-    is_dead = False
-    collision_side = None  # New variable
-    collided_tile = None  # New variable for tile type
+# Create objects
+everything = pygame.sprite.Group()
+spikes = pygame.sprite.Group()
+tiles = []
+for row_index, row in enumerate(level_data):
+    for col_index, tile in enumerate(row):
+        tile_image = tile_images.get(tile)
+        if tile_image:
+            tile_obj = GameObject(col_index * TILE_SIZE, row_index * TILE_SIZE, tile_image, tile)
+            everything.add(tile_obj)
+            tiles.append(tile_obj)
+            if tile in ['s', 'd', 'f', 'e']:
+                spikes.add(tile_obj)
 
-    for y in range(top_tile_y, bottom_tile_y + 1):
-        for x in range(left_tile_x, right_tile_x + 1):
-            if 0 <= y < LEVEL_HEIGHT and 0 <= x < LEVEL_WIDTH:  # check if tiles are in range
-                tile = level_data[y][x]
-                if tile == 't' or tile == 'g':  # Check for collision with grass tiles
-                    tile_rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-                    if player_rect.colliderect(tile_rect):
-                        colliding = True
+player = GameObject(player_x, player_y, sprites[0])
+everything.add(player)
 
-                        # check for collision direction
-                        if player_rect.bottom > tile_rect.top and player_rect.centery < tile_rect.centery:  # top collision
-                            player_rect.bottom = tile_rect.top + 1  # Move player 1 pixel above
-                            collision_side = "top"
-                            collided_tile = tile  # Store the tile
-                            return True, False, collision_side, collided_tile, player_rect
-                        if player_rect.top < tile_rect.bottom and player_rect.centery > tile_rect.centery:  # bottom collision
-                            player_rect.top = tile_rect.bottom
-                            collision_side = "bottom"
-                            return True, False, collision_side, collided_tile, player_rect
-
-                        if player_rect.right > tile_rect.left and player_rect.centerx < tile_rect.centerx:  # left collision
-                            player_rect.right = tile_rect.left
-                            collision_side = "left"
-                            return True, False, collision_side, collided_tile, player_rect
-                        if player_rect.left < tile_rect.right and player_rect.centerx > tile_rect.centerx:  # right collision
-                            player_rect.left = tile_rect.right
-                            collision_side = "right"
-                            return True, False, collision_side, collided_tile, player_rect
-                if tile == 's' or tile == 'd' or tile == 'f' or tile == 'e':
-                    tile_rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-                    if player_rect.colliderect(tile_rect):
-                        is_dead = True
-    return colliding, is_dead, collision_side, collided_tile, player_rect
-
+# Function to respawn the player
+def respawn_player():
+    global player_x, player_y, y_velocity, is_jumping, is_on_ground, player_frame, movement_direction, death_animation_delay
+    # Reset player position
+    for row_index, row in enumerate(level_data):
+        if 't' in row:
+            player_start_y = row_index * TILE_SIZE
+            break
+    else:
+        player_start_y = 500
+    new_y = player_start_y - sprites[0].get_height()
+    player.rect.topleft = (0, new_y)
+    # Reset physics and state
+    y_velocity = 0
+    is_jumping = False
+    is_on_ground = False
+    player_frame = 0
+    movement_direction = None
+    death_animation_delay = 0
+    # Ensure player lands on ground after respawn
+    player.move(0, 1, everything)
 
 # Main loop
 running = True
 clock = pygame.time.Clock()
+current_sprite_index = 0
 
 while running:
-
-    side_collision = False
-
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        if event.type == pygame.KEYDOWN and not is_dead:
-            if event.key in [pygame.K_d, pygame.K_RIGHT]:
-                movement_direction = "right"
-            if event.key in [pygame.K_a, pygame.K_LEFT]:
-                movement_direction = "left"
-            if event.key in [pygame.K_w, pygame.K_UP] and not is_jumping and is_on_ground:
-                is_jumping = True
-                y_velocity = -15
-                is_on_ground = False  # when we jump, is_on_ground = False
-        if event.type == pygame.KEYUP and not is_dead:
-            if (event.key in [pygame.K_d, pygame.K_RIGHT]) and movement_direction == "right":
-                movement_direction = None
-            if (event.key in [pygame.K_a, pygame.K_LEFT]) and movement_direction == "left":
-                movement_direction = None
-    if not is_dead:
-        # Movement & Animation Logic
-        if movement_direction == "right" and not side_collision:
-            player_x += player_speed
-            if not is_jumping:
-                player_frame = (player_frame + 1) % (len(right_frames) * animation_speed)
-                current_sprite_index = right_frames[player_frame // animation_speed]
-            else:
-                current_sprite_index = 0
+        if not is_dead:
+            if event.type == pygame.KEYDOWN:
+                if event.key in [pygame.K_d, pygame.K_RIGHT]:
+                    movement_direction = "right"
+                if event.key in [pygame.K_a, pygame.K_LEFT]:
+                    movement_direction = "left"
+                if event.key in [pygame.K_w, pygame.K_UP] and is_on_ground:
+                    is_jumping = True
+                    y_velocity = -15
+                    is_on_ground = False
+            if event.type == pygame.KEYUP:
+                if event.key in [pygame.K_d, pygame.K_RIGHT] and movement_direction == "right":
+                    movement_direction = None
+                if event.key in [pygame.K_a, pygame.K_LEFT] and movement_direction == "left":
+                    movement_direction = None
 
-        elif movement_direction == "left" and not side_collision:
-            player_x -= player_speed
-            if not is_jumping:
-                player_frame = (player_frame + 1) % (len(right_frames) * animation_speed)
-                current_sprite_index = right_frames[player_frame // animation_speed]
-            else:
-                current_sprite_index = 0
+    # Player movement
+    dx, dy = 0, 0
+    if not is_dead:
+        if movement_direction == "right":
+            dx += player_speed
+            player_frame = (player_frame + 1) % (len(right_frames) * 2)
+            current_sprite_index = right_frames[player_frame // 2]
+            facing_right = True
+        elif movement_direction == "left":
+            dx -= player_speed
+            player_frame = (player_frame + 1) % (len(right_frames) * 2)
+            current_sprite_index = right_frames[player_frame // 2]
+            facing_right = False
         else:
             current_sprite_index = 0
-    else:
-        current_sprite_index = dead_frame  # If dead use death sprite
 
-    # Keep player within screen bounds
-    player_x = max(0, player_x)
-    player_x = min(WIDTH - sprites[0].get_width(), player_x)
+        # Jump and gravity
+        if is_jumping:
+            dy += y_velocity
+            y_velocity += gravity
+        elif not is_on_ground:
+            dy += gravity
 
-    # Jumping Logic
-    if is_jumping:
-        player_y += y_velocity
-        y_velocity += gravity
+    # Limit player movement within screen bounds
+    if player.rect.right + dx > WIDTH:
+        dx = WIDTH - player.rect.right
+    if player.rect.left + dx < 0:
+        dx = -player.rect.left
 
-    # Create player rect
-    player_rect = pygame.Rect(player_x, player_y, sprites[0].get_width(), sprites[0].get_height())
+    player.move(dx, dy, everything)
 
-    # check for collisions
-    colliding, is_dead_temp, collision_side, collided_tile, player_rect = check_collision(player_rect, level_data)
-
-    if colliding and collision_side == "top" and (collided_tile == 't' or collided_tile == 'g'):
-        is_jumping = False
-        y_velocity = 0
-        player_y = player_rect.y
-        is_on_ground = True  # Set to True here only
-    if colliding and collision_side in ["left", "right"]:
-        side_collision = True
-        player_x = player_rect.x
-    if colliding and collision_side == "bottom":
-        player_y = player_rect.y
-    if not colliding:
-        is_jumping = True
-
-    if colliding and (collided_tile == "s" or collided_tile == "d" or collided_tile == "f" or collided_tile == "e"):
+    # Spike collision check
+    if not is_dead and pygame.sprite.spritecollideany(player, spikes):
         is_dead = True
-
-    if player_y >= 500 and not colliding:
-        player_y = 500
-        is_jumping = False
+        current_sprite_index = 4
+        movement_direction = None
         y_velocity = 0
-        is_on_ground = True  # Set to True here only
+        is_jumping = False
 
-    if is_dead_temp:
-        is_dead = True
+    # Death animation
+    if is_dead:
+        death_animation_delay += 1
+        if death_animation_delay > 30:  # Wait for 30 frames before respawning
+            respawn_player()
+            is_dead = False
 
-    # Falling logic
-    if not is_on_ground and not is_jumping and not is_dead:
-        player_y += gravity * 2  # Add gravity
-
-    # Clear the screen
+    # Rendering
     screen.fill(WHITE)
+    for tile in tiles:
+        screen.blit(tile.image, tile.rect)
 
-    # Draw Level
-    for row_index, row in enumerate(level_data):
-        for col_index, tile in enumerate(row):
-            tile_image = tile_images.get(tile)
-            if tile_image:
-                screen.blit(tile_image, (col_index * TILE_SIZE, row_index * TILE_SIZE))
-
-    # Blit the current sprite
     current_sprite = sprites[current_sprite_index]
-    if movement_direction == 'left' and not is_dead:
-        flipped_sprite = pygame.transform.flip(current_sprite, True, False)
-        screen.blit(flipped_sprite, (player_x, player_y))
+    if facing_right or is_dead:
+        screen.blit(current_sprite, player.rect)
     else:
-        screen.blit(current_sprite, (player_x, player_y))
+        flipped = pygame.transform.flip(current_sprite, True, False)
+        screen.blit(flipped, player.rect)
 
-    # Update the display
     pygame.display.flip()
     clock.tick(60)
 
