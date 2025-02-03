@@ -1,4 +1,6 @@
 import pygame
+import os
+
 pygame.init()
 pygame.display.init()
 
@@ -11,6 +13,24 @@ pygame.display.set_caption("IWKMS")
 # Colors
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
+
+
+# Load game progression
+def load_game_progress():
+    if not os.path.exists("game_progression.txt"):
+        with open("game_progression.txt", "w") as file:
+            file.write("0")
+    with open("game_progression.txt", "r") as file:
+        return int(file.read().strip())
+
+
+def save_game_progress(level_index):
+    with open("game_progression.txt", "w") as file:
+        file.write(str(level_index))
+
+
+level_index = str(load_game_progress())
+
 
 class SpriteSheet:
     def __init__(self, filename):
@@ -33,6 +53,7 @@ class SpriteSheet:
     def images_at(self, rects, colorkey=None):
         return [self.image_at(rect, colorkey) for rect in rects]
 
+
 # Load spritesheet
 spritesheet = SpriteSheet("qubic.png")
 
@@ -54,14 +75,22 @@ tile_images = {
     'd': pygame.transform.scale(pygame.image.load("spike2.png").convert_alpha(), (TILE_SIZE, TILE_SIZE)),
     'f': pygame.transform.scale(pygame.image.load("spike3.png").convert_alpha(), (TILE_SIZE, TILE_SIZE)),
     'e': pygame.transform.scale(pygame.image.load("spike4.png").convert_alpha(), (TILE_SIZE, TILE_SIZE)),
+    'w': pygame.transform.scale(pygame.image.load("cuboc.png").convert_alpha(), (TILE_SIZE, TILE_SIZE)),
     '.': None
 }
 
-def load_level(filename):
-    with open(filename, 'r') as file:
-        return [row.strip() for row in file]
 
-level_data = load_level("level.txt")
+def load_level(filename):
+    try:
+        with open(filename, 'r') as file:
+            return [row.strip() for row in file]
+    except FileNotFoundError:
+        print(f"Error: Level file '{filename}' not found.")
+        pygame.quit()
+        exit()
+
+
+level_data = load_level("level" + level_index + ".txt")
 LEVEL_WIDTH, LEVEL_HEIGHT = len(level_data[0]), len(level_data)
 
 # Player settings
@@ -69,7 +98,7 @@ player_x, player_y = 50, 200
 player_speed = 5
 player_frame = 0
 movement_direction = None
-is_jumping = False
+is_jumping = True
 y_velocity = 0
 gravity = 1
 facing_right = True
@@ -87,6 +116,7 @@ else:
     player_start_y = 500
 player_x = 0
 player_y = player_start_y - sprites[0].get_height()
+
 
 class GameObject(pygame.sprite.Sprite):
     def __init__(self, x, y, image=None, tile_type=None):
@@ -121,9 +151,11 @@ class GameObject(pygame.sprite.Sprite):
                     y_velocity = 0
                 dy = 0
 
+
 # Create objects
 everything = pygame.sprite.Group()
 spikes = pygame.sprite.Group()
+cup = pygame.sprite.Group()
 tiles = []
 for row_index, row in enumerate(level_data):
     for col_index, tile in enumerate(row):
@@ -134,9 +166,12 @@ for row_index, row in enumerate(level_data):
             tiles.append(tile_obj)
             if tile in ['s', 'd', 'f', 'e']:
                 spikes.add(tile_obj)
+            if tile == 'w':
+                cup.add(tile_obj)
 
 player = GameObject(player_x, player_y, sprites[0])
 everything.add(player)
+
 
 # Function to respawn the player
 def respawn_player():
@@ -159,6 +194,7 @@ def respawn_player():
     death_animation_delay = 0
     # Ensure player lands on ground after respawn
     player.move(0, 1, everything)
+
 
 # Main loop
 running = True
@@ -223,6 +259,14 @@ while running:
         movement_direction = None
         y_velocity = 0
         is_jumping = False
+
+    # Win condition (cup collision)
+    if not is_dead and pygame.sprite.spritecollideany(player, cup):
+        current_level = int(level_index)
+        save_game_progress(current_level + 1)
+        running = False
+        pygame.quit()
+        exit()
 
     # Death animation
     if is_dead:
