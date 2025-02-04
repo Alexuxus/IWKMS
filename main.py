@@ -8,7 +8,7 @@ pygame.display.init()
 WIDTH, HEIGHT = 1024, 512
 TILE_SIZE = 8
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("IWKMS")
+pygame.display.set_caption("I WANNA BE A PVL")
 
 # Colors
 WHITE = (255, 255, 255)
@@ -106,12 +106,13 @@ is_dead = False
 is_on_ground = False
 death_animation_delay = 0
 right_frames = [0, 1, 2, 3]
-
+tprev = 1000000
 # Find starting position
 for row_index, row in enumerate(level_data):
-    if 't' in row:
+    if 't' in row and tprev > row_index * TILE_SIZE:
         player_start_y = row_index * TILE_SIZE
-        break
+        tprev = player_start_y
+
 else:
     player_start_y = 500
 player_x = 0
@@ -274,6 +275,8 @@ while running:
         if death_animation_delay > 30:  # Wait for 30 frames before respawning
             respawn_player()
             is_dead = False
+            is_jumping = True
+            is_on_ground = False
 
     # Rendering
     screen.fill(WHITE)
