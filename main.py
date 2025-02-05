@@ -212,10 +212,18 @@ while running:
                     movement_direction = "right"
                 if event.key in [pygame.K_a, pygame.K_LEFT]:
                     movement_direction = "left"
-                if event.key in [pygame.K_w, pygame.K_UP] and is_on_ground:
+                if event.key in [pygame.K_UP, pygame.K_SPACE] and is_on_ground and level_index == "0":
+                    print('kjb')
+                    current_level = int(level_index)
+                    save_game_progress(current_level + 1)
+                    running = False
+                    pygame.quit()
+                    exit()
+                elif event.key in [pygame.K_UP, pygame.K_w] and is_on_ground:
                     is_jumping = True
                     y_velocity = -15
                     is_on_ground = False
+
             if event.type == pygame.KEYUP:
                 if event.key in [pygame.K_d, pygame.K_RIGHT] and movement_direction == "right":
                     movement_direction = None
@@ -278,6 +286,7 @@ while running:
             is_jumping = True
             is_on_ground = False
 
+
     # Rendering
     screen.fill(WHITE)
     for tile in tiles:
@@ -285,7 +294,14 @@ while running:
 
     current_sprite = sprites[current_sprite_index]
     if facing_right or is_dead:
-        screen.blit(current_sprite, player.rect)
+        if level_index == "0":
+            image = pygame.image.load("TITLE SCREEN.pngdd").convert()
+            scaled_image = pygame.transform.scale(image, (1024, 512))
+            screen.blit(image, (0, 0))
+
+        else:
+            screen.blit(current_sprite, player.rect)
+
     else:
         flipped = pygame.transform.flip(current_sprite, True, False)
         screen.blit(flipped, player.rect)
