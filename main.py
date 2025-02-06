@@ -1,8 +1,9 @@
+
 import pygame
 import os
 
 pygame.init()
-pygame.display.init()
+pygame.mixer.init()  # Initialize the mixer
 
 # Screen settings
 WIDTH, HEIGHT = 1024, 512
@@ -13,6 +14,31 @@ pygame.display.set_caption("I WANNA BE A PVL")
 # Colors
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
+
+# Music files
+BACKGROUND_MUSIC_LEVEL0 = "background-song.mp3"  # Replace with your actual file
+BACKGROUND_MUSIC_OTHER = "back-background-song.mp3"  # Replace with your actual file
+DEATH_MUSIC = "death_mus.mp3"  # Replace with your actual file
+tprev = 0
+# Load the background music.  Replace "your_music.mp3" with the actual path.
+try:
+    pygame.mixer.music.load(BACKGROUND_MUSIC_LEVEL0)
+    pygame.mixer.music.set_volume(0.5)  # Adjust the volume as desired
+    pygame.mixer.music.play(-1)
+except pygame.error as e:
+    print(f"Error loading music: {e}")
+    # Handle the error appropriately (e.g., exit, disable music)
+    raise SystemExit()
+
+
+# Function to play music
+def play_music(music_file, loop=-1):
+    try:
+        pygame.mixer.music.load(music_file)
+        pygame.mixer.music.set_volume(0.5)
+        pygame.mixer.music.play(loop)
+    except pygame.error as e:
+        print(f"Error loading music: {e}")
 
 
 # Load game progression
@@ -107,9 +133,11 @@ is_on_ground = False
 death_animation_delay = 0
 right_frames = [0, 1, 2, 3]
 tprev = 1000000
+
+
 # Find starting position
 for row_index, row in enumerate(level_data):
-    if 't' in row and tprev > row_index * TILE_SIZE:
+    if 't' in row and tprev < row_index * TILE_SIZE:
         player_start_y = row_index * TILE_SIZE
         tprev = player_start_y
 
@@ -176,7 +204,10 @@ everything.add(player)
 
 # Function to respawn the player
 def respawn_player():
-    global player_x, player_y, y_velocity, is_jumping, is_on_ground, player_frame, movement_direction, death_animation_delay
+    global player_x, player_y, y_velocity, is_jumping, is_on_ground, player_frame, movement_direction, death_animation_delay, is_dead
+    # Stop background music and play death music
+    play_music(DEATH_MUSIC, 0)  # Play once
+
     # Reset player position
     for row_index, row in enumerate(level_data):
         if 't' in row:
@@ -195,7 +226,78 @@ def respawn_player():
     death_animation_delay = 0
     # Ensure player lands on ground after respawn
     player.move(0, 1, everything)
+    # Delay before restarting background music
+    pygame.time.delay(2000) # Pause for 2 seconds
 
+    #Start Music again
+    is_dead = False  # Reset death state
+    # Restart background music
+    if level_index == "0":
+        play_music(BACKGROUND_MUSIC_LEVEL0)
+    else:
+        play_music(BACKGROUND_MUSIC_OTHER)
+
+
+# Function to load the next level
+def load_next_level():
+    global level_index, level_data, current_level, everything, spikes, cup, tiles
+
+    # Increment level index
+    level_index = str(int(level_index) + 1)
+
+    # Save progress
+    save_game_progress(level_index)
+
+    # Stop music and play next level's music
+    pygame.mixer.music.stop()
+    play_music(BACKGROUND_MUSIC_OTHER)  # Play other background music
+
+    # Load next level data
+    current_level = "level" + level_index + ".txt"
+    level_data = load_level(current_level)
+
+    # Clear existing game objects
+    everything.empty()
+    spikes.empty()
+    cup.empty()
+    tiles.clear()
+
+    # Create game objects for the new level
+    for row_index, row in enumerate(level_data):
+        for col_index, tile in enumerate(row):
+            tile_image = tile_images.get(tile)
+            if tile_image:
+                tile_obj = GameObject(col_index * TILE_SIZE, row_index * TILE_SIZE, tile_image, tile)
+                everything.add(tile_obj)
+                tiles.append(tile_obj)
+                if tile in ['s', 'd', 'f', 'e']:
+                    spikes.add(tile_obj)
+                if tile == 'w':
+                    cup.add(tile_obj)
+
+    # Find starting position
+    for row_index, row in enumerate(level_data):
+        if 't' in row:
+            player_start_y = row_index * TILE_SIZE
+
+    else:
+        player_start_y = 500
+    player_x = 0
+    player_y = player_start_y - sprites[0].get_height()
+
+    # Reset player
+    player.rect.x = player_x
+    player.rect.y = player_y
+    everything.add(player)
+
+    return True
+
+
+# Initialize music based on the current level
+if level_index == "0":
+    play_music(BACKGROUND_MUSIC_LEVEL0)
+else:
+    play_music(BACKGROUND_MUSIC_OTHER)  # Start with the default music
 
 # Main loop
 running = True
@@ -213,12 +315,15 @@ while running:
                 if event.key in [pygame.K_a, pygame.K_LEFT]:
                     movement_direction = "left"
                 if event.key in [pygame.K_UP, pygame.K_SPACE] and is_on_ground and level_index == "0":
-                    print('kjb')
-                    current_level = int(level_index)
-                    save_game_progress(current_level + 1)
-                    running = False
-                    pygame.quit()
-                    exit()
+                    pygame.mixer.music.stop()
+                    load_next_level()
+                    if not level_data:
+                        running = False  # No more levels, quit the game
+                    level_index = str(load_game_progress())
+                    if level_index == "0":
+                        play_music(BACKGROUND_MUSIC_LEVEL0)
+                    else:
+                        play_music(BACKGROUND_MUSIC_OTHER)
                 elif event.key in [pygame.K_UP, pygame.K_w] and is_on_ground:
                     is_jumping = True
                     y_velocity = -15
@@ -273,8 +378,14 @@ while running:
     if not is_dead and pygame.sprite.spritecollideany(player, cup):
         current_level = int(level_index)
         save_game_progress(current_level + 1)
-        running = False
-        pygame.quit()
+        load_next_level()
+        if not level_data:
+            running = False  # No more levels, quit the game
+        level_index = str(load_game_progress())
+        if level_index == "0":
+            play_music(BACKGROUND_MUSIC_LEVEL0)
+        else:
+            play_music(BACKGROUND_MUSIC_OTHER)
         exit()
 
     # Death animation
@@ -295,7 +406,7 @@ while running:
     current_sprite = sprites[current_sprite_index]
     if facing_right or is_dead:
         if level_index == "0":
-            image = pygame.image.load("TITLE SCREEN.pngdd").convert()
+            image = pygame.image.load("TITLE SCREEN.png").convert()
             scaled_image = pygame.transform.scale(image, (1024, 512))
             screen.blit(image, (0, 0))
 
