@@ -310,11 +310,11 @@ while running:
             running = False
         if not is_dead:
             if event.type == pygame.KEYDOWN:
-                if event.key in [pygame.K_d, pygame.K_RIGHT]:
+                if event.key in [pygame.K_d, pygame.K_RIGHT] and level_index != "0":
                     movement_direction = "right"
-                if event.key in [pygame.K_a, pygame.K_LEFT]:
+                if event.key in [pygame.K_a, pygame.K_LEFT] and level_index != "0":
                     movement_direction = "left"
-                if event.key in [pygame.K_UP, pygame.K_SPACE] and is_on_ground and level_index == "0":
+                if event.key in [pygame.K_SPACE] and is_on_ground and level_index == "0":
                     pygame.mixer.music.stop()
                     load_next_level()
                     if not level_data:
@@ -324,15 +324,15 @@ while running:
                         play_music(BACKGROUND_MUSIC_LEVEL0)
                     else:
                         play_music(BACKGROUND_MUSIC_OTHER)
-                elif event.key in [pygame.K_UP, pygame.K_w] and is_on_ground:
+                elif event.key in [pygame.K_UP, pygame.K_w] and is_on_ground and level_index != "0":
                     is_jumping = True
                     y_velocity = -15
                     is_on_ground = False
 
             if event.type == pygame.KEYUP:
-                if event.key in [pygame.K_d, pygame.K_RIGHT] and movement_direction == "right":
+                if event.key in [pygame.K_d, pygame.K_RIGHT] and movement_direction == "right" and level_index != "0":
                     movement_direction = None
-                if event.key in [pygame.K_a, pygame.K_LEFT] and movement_direction == "left":
+                if event.key in [pygame.K_a, pygame.K_LEFT] and movement_direction == "left" and level_index != "0":
                     movement_direction = None
 
     # Player movement
