@@ -409,6 +409,10 @@ while running:
             image = pygame.image.load("TITLE SCREEN.png").convert()
             scaled_image = pygame.transform.scale(image, (1024, 512))
             screen.blit(image, (0, 0))
+        if level_index == "9":
+            image = pygame.image.load("END_SCREEN.png").convert()
+            scaled_image = pygame.transform.scale(image, (1024, 512))
+            screen.blit(image, (0, 0))
 
         else:
             screen.blit(current_sprite, player.rect)
