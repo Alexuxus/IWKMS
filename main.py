@@ -684,7 +684,7 @@ while running:
         play_sound(FAKE_ERROR_MUSIC)  # Play the fake error sound
         pygame.time.delay(2000)  # Let the sound play for a bit
 
-        exit()
+        running = False
 
     # Death animation
     if is_dead:
@@ -766,3 +766,4 @@ while running:
     pygame.display.flip()
 
 pygame.quit()
+
